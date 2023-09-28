@@ -1,0 +1,45 @@
+version: "3"
+
+services:
+
+  # Imagine this is some service that requires access to a VPN via the gluetun service
+  # See: https://github.com/qdm12/gluetun-wiki/blob/v3.35.0/setup/connect-a-container-to-gluetun.md
+  # We are interested in its logs!
+  service-that-requires-access-to-the-vpn:
+    image: nginx:1.24-alpine
+    container_name: service-that-requires-access-to-the-vpn
+    # promtail does not discover this container because of the network_mode setting
+    network_mode: "service:gluetun"
+
+  gluetun:
+    image: qmcgaw/gluetun:v3.35.0
+    container_name: gluetun
+    ports:
+      - 8080:80
+    cap_add:
+      - NET_ADMIN
+    volumes:
+      - ./custom.ovpn:/gluetun/custom.ovpn
+    environment:
+      - VPN_SERVICE_PROVIDER=custom
+      - VPN_TYPE=openvpn
+      - OPENVPN_USER=freeopenvpn
+      # Password changes periodically. You may need to change it!
+      # See: https://www.freeopenvpn.org/premium.php?cntid=USA&lang=en
+      - OPENVPN_PASSWORD=011458472
+      - OPENVPN_CUSTOM_CONFIG=/gluetun/custom.ovpn
+
+  promtail:
+    image: grafana/promtail:2.9.1
+    container_name: promtail
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - ./config.yml:/etc/promtail/config.yml
+    command: -config.file=/etc/promtail/config.yml
+
+  loki:
+    image: grafana/loki:2.9.1
+    container_name: loki
+    ports:
+      - "3100:3100"
+    command: -config.file=/etc/loki/local-config.yaml
